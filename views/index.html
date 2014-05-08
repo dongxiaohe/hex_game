@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Hex game</title>
+    <script src="//code.jquery.com/jquery-1.11.0.min.js"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.0.7/angular.min.js"></script>
+    <link rel="stylesheet" href="//netdna.bootstrapcdn.com/bootstrap/3.1.1/css/bootstrap.min.css">
+
+<body ng-app="hexApp" ng-controller="hexController">
+<div ng-show="false">Please wait ...</div>
+<div ng-cloak style="display: none" ng-show="delayShow">
+    <div class="form-group has-error" ng-show="showError()">
+        <label class="control-label">Error: It is not your turn to make move.</label>
+    </div>
+    <form id="login-red" role="form" ng-show="!playerStatus.hasRedPlayer && !side">
+        <div class="form-group">
+            <button type="submit" class="btn btn-success">Join as a red player</button>
+        </div>
+    </form>
+    <form id="login-blue" role="form" ng-show="!playerStatus.hasBluePlayer && !side">
+        <div class="form-group">
+            <button type="submit" class="btn btn-success">Join as a blue player</button>
+        </div>
+    </form>
+    <form id="move-form" role="form" ng-show="(playerStatus.hasRedPlayer || playerStatus.hasBluePlayer) && side">
+        <div class="form-group">
+            <button id="move-action" class="btn btn-primary">Make a move</button>
+        </div>
+    </form>
+    <form id="logout-form" role="form" ng-show="(playerStatus.hasRedPlayer || playerStatus.hasBluePlayer) && side">
+        <div class="form-group">
+            <button id="logout-action" class="btn btn-primary">Quit</button>
+        </div>
+    </form>
+    <p class="text-success" ng-bind-html-unsafe='gameActions' />
+</div>
+<script src="/socket.io/socket.io.js"></script>
+
+<script>
+    angular.module('hexApp', []).controller('hexController', function($scope) {
+        $scope.gameActions = '';
+        $scope.playerStatus = {};
+        $scope.showError = function() {
+          return $scope.hasError && $scope.errorSide == $scope.side
+        };
+        function viewer() {
+            $.ajax({
+                type: 'POST',
+                data: {},
+                url: '/viewer'
+            }).done(function (result) {
+                $scope.token = result.token;
+                connect();
+                $scope.delayShow = true;
+            });
+        }
+
+        function connect() {
+            socket = io.connect('', {
+                'force new connection': true,
+                query: $scope.token ? 'token=' + $scope.token : undefined
+            });
+
+            socket.on('moveResponse', function (response) {
+                $scope.$apply(function () {
+                    if (!response.isError) {
+                        $scope.hasError = false;
+                        $scope.gameActions = response.info;
+                    } else {
+                        $scope.hasError = true;
+                        $scope.errorSide = response.side;
+                    }
+                });
+            }).on('playerStatus', function (playerStatus) {
+                $scope.$apply(function () {
+                    $scope.playerStatus = playerStatus;
+                });
+            });
+        }
+
+        viewer(); //connect as a viewer
+
+        $('#move-action').on('click', function () {
+            socket.emit('moveRequest', $scope.token);
+        });
+
+        $('#logout-action').on('click', function () {
+            socket.emit('logout', $scope.token);
+            $scope.side = undefined;
+        });
+
+        $('#login-red').submit(function (e) {
+            e.preventDefault();
+            $.ajax({
+                type: 'POST',
+                data: {},
+                url: '/red'
+            }).done(function (result) {
+                $scope.token = result.token;
+                connect();
+                $scope.side = 'red';
+            });
+        });
+        $('#login-blue').submit(function (e) {
+            e.preventDefault();
+            $.ajax({
+                type: 'POST',
+                data: {},
+                url: '/blue'
+            }).done(function (result) {
+                $scope.token = result.token;
+                connect();
+                $scope.side = 'blue';
+            });
+        });
+    });
+</script>
+</body>
+</html>
